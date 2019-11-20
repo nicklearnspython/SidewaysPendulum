@@ -1,5 +1,5 @@
 /**
- * Usage, according to documentation(https://www.firediy.fr/files/drone/HW-01-V4.pdf) : 
+ * Calibration Usage, according to documentation(https://www.firediy.fr/files/drone/HW-01-V4.pdf) : 
  *     1. Plug your Arduino to your computer with USB cable, open terminal, then type 1 to send max throttle to every ESC to enter programming mode
  *     2. Power up your ESCs. You must hear "beep1 beep2 beep3" tones meaning the power supply is OK
  *     3. After 2sec, "beep beep" tone emits, meaning the throttle highest point has been correctly confirmed
@@ -9,12 +9,25 @@
  *     7. Type 2 to launch test function. This will send min to max throttle to ESCs to test them
  *
  * @author lobodol <grobodol@gmail.com>
+ * 
+ *
+ * New Functions Game Plan
+ *      3. Medium throttle (1500 PWM) 
+ *      4. Listen to IMU and print and command medium throttle
+ *      5. Listen to RC controller and print and command medium throttle
+ *      6. Listen to both RC cont. and IMU and print and command medium throttle
+ *      7. P controller
+ *      8. PI controller
+ *      9. PID controller
+ *      10. State Space controller
+ * 
  */
 // ---------------------------------------------------------------------------
 #include <Servo.h>
 // ---------------------------------------------------------------------------
 // Customize here pulse lengths as needed
 #define MIN_PULSE_LENGTH 1100 // Minimum pulse length in µs
+#define MED_PULSE_LENGTH 1500 // Medium  pulse length in µs
 #define MAX_PULSE_LENGTH 1900 // Maximum pulse length in µs
 // ---------------------------------------------------------------------------
 Servo motA, motB, motC, motD;
@@ -67,6 +80,11 @@ void loop() {
                       Serial.println(" 1...");
                       delay(1000);
                       test();
+            break;
+            
+            // 3
+            case 51 : Serial.print("Sending medium throttle");
+                      motD.writeMicroseconds(MED_PULSE_LENGTH);
             break;
         }
     }
