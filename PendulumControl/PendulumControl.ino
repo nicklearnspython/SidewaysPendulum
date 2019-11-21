@@ -26,8 +26,8 @@
 #define ARM_PULSE_LENGTH 1180 // Arming  pulse length in µs
 #define MAX_PULSE_LENGTH 1900 // Maximum pulse length in µs
 
-#define ARM_DELAY = 3000      // [ms] 3 seconds
-#define 
+#define ARM_DELAY 3000      // [ms] 3 seconds
+
 // ---------------------------------------------------------------------------
 // Variables
 Servo motor;
