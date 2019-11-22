@@ -25,7 +25,7 @@
 // Constants
 #define MIN_PULSE_LENGTH 1100 // Minimum pulse length in µs
 #define ARM_PULSE_LENGTH 1180 // Arming  pulse length in µs
-#define HOV_PULSE_LENGTH 1341 // Hover   pulse length in µs
+#define HOV_PULSE_LENGTH 1320 // Hover   pulse length in µs 1341
 #define MAX_PULSE_LENGTH 1900 // Maximum pulse length in µs
 
 #define ARM_DELAY 3000      // [ms] 3 seconds
@@ -55,6 +55,9 @@
 #define beta   0.1
 #define dt     0.01
 
+#define Kp        1
+#define ANGLE_REF 0
+
 // ---------------------------------------------------------------------------
 // Variables
 Servo motor;
@@ -67,6 +70,7 @@ float ax;
 float az;
 float gy;
 
+int input_pulse_length;
 // ---------------------------------------------------------------------------
 
 /**
@@ -120,6 +124,25 @@ void loop() {
                         delay(20);
                       }
             break;
+
+            case 53 : Serial.println("P-Controller");
+                      Serial.println("Stand back ladies and gentlemen");
+                      countdown();
+                      arm();
+                      for (int i = 0; i < 1200; i++){
+                        readAndCalculate();
+                        input_pulse_length = (ANGLE_REF - angle) * Kp + HOV_PULSE_LENGTH;
+                        motor.writeMicroseconds(input_pulse_length);
+                        
+                        Serial.print("angle: ");
+                        Serial.print(angle);
+                        Serial.print(" | input: ");
+                        Serial.println(input_pulse_length);
+                        delay(20);
+                      }
+                      disarm(); 
+                      
+                      
         }
     }
 }
@@ -263,6 +286,7 @@ void displayInstructions()
     Serial.println("\t2 : Run test function");
     Serial.println("\t3 : Run arm function");
     Serial.println("\t4 : Print IMU Data");
+    Serial.println("\t5 : P Controller");
 }
 
 
