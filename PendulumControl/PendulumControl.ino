@@ -9,8 +9,8 @@
  * New Functions Game Plan
  *      3. Arming throttle (1140 PWM) 
  *      4. Listen to IMU and print
- *      5. Listen to RC controller
- *      6. Listen to both RC cont. and IMU and print
+ 
+ 
  *      7. P controller
  *      8. PI controller
  *      9. PID controller
@@ -20,27 +20,64 @@
  
 // ---------------------------------------------------------------------------
 #include <Servo.h>
+#include <Wire.h>
 // ---------------------------------------------------------------------------
 // Constants
 #define MIN_PULSE_LENGTH 1100 // Minimum pulse length in µs
 #define ARM_PULSE_LENGTH 1180 // Arming  pulse length in µs
+#define HOV_PULSE_LENGTH 1341 // Hover   pulse length in µs
 #define MAX_PULSE_LENGTH 1900 // Maximum pulse length in µs
 
 #define ARM_DELAY 3000      // [ms] 3 seconds
+
+#define MPU9250_ADDRESS           0x68
+#define MAG_ADDRESS               0x0C
+
+#define GYRO_FULL_SCALE_250_DPS   0x00  
+#define GYRO_FULL_SCALE_500_DPS   0x08
+#define GYRO_FULL_SCALE_1000_DPS  0x10
+#define GYRO_FULL_SCALE_2000_DPS  0x18
+
+#define ACC_FULL_SCALE_2_G        0x00  
+#define ACC_FULL_SCALE_4_G        0x08
+#define ACC_FULL_SCALE_8_G        0x10
+#define ACC_FULL_SCALE_16_G       0x18
+
+#define mx     0.00119597
+#define my     0.00119597
+#define mz     0.00119269
+#define bx     0.08292081
+#define by     0.30098593
+#define bz    -0.02623918
+
+#define pi     3.1415926
+#define alpha  0.9
+#define beta   0.1
+#define dt     0.01
 
 // ---------------------------------------------------------------------------
 // Variables
 Servo motor;
 char data;
+
+float angle;
+float angle_accel;
+
+float ax;
+float az;
+float gy;
+
 // ---------------------------------------------------------------------------
 
 /**
  * Initialization routine
  */
 void setup() {
-    Serial.begin(9600);
+    Wire.begin();
+    Serial.begin(115200);
     motor.attach(9, MIN_PULSE_LENGTH, MAX_PULSE_LENGTH);
     motor.writeMicroseconds(MIN_PULSE_LENGTH); // Initialize motor to off
+    initializeIMU();
     displayInstructions();
 }
 
@@ -69,11 +106,19 @@ void loop() {
             break;
             
             // 3
-            case 51 : Serial.print("Running test number 2");
+            case 51 : Serial.print("Running arming test");
                       countdown();
                       arm();
                       disarm();
-                      
+            break;
+
+            // 4
+            case 52 : Serial.print("Printing accelerometer data");
+                      for (int i = 0; i < 1200; i++){
+                        readAndCalculate();
+                        Serial.println(angle);
+                        delay(20);
+                      }
             break;
         }
     }
@@ -100,6 +145,7 @@ void test()
     disarm();
 }
 
+
 /**
  * Arms the motor setting the output to a low spinning PWM
  */
@@ -110,6 +156,7 @@ void arm()
     delay(ARM_DELAY);
 }
 
+
 /**
  * Disarms the motor setting the output to lowest PWM
  */
@@ -119,6 +166,92 @@ void disarm()
     motor.writeMicroseconds(MIN_PULSE_LENGTH);
 }
 
+
+/*
+ * This function read Nbytes bytes from I2C device at address Address. 
+ * Put read bytes starting at register Register in the Data array. 
+ */
+void I2Cread(uint8_t Address, uint8_t Register, uint8_t Nbytes, uint8_t* Data)
+{
+  // Set register address
+  Wire.beginTransmission(Address);
+  Wire.write(Register);
+  Wire.endTransmission();
+  
+  // Read Nbytes
+  Wire.requestFrom(Address, Nbytes); 
+  uint8_t index=0;
+  while (Wire.available())
+    Data[index++]=Wire.read();
+}
+
+
+/*
+ * Write a byte (Data) in device (Address) at register (Register)
+ */
+void I2CwriteByte(uint8_t Address, uint8_t Register, uint8_t Data)
+{
+  // Set register address
+  Wire.beginTransmission(Address);
+  Wire.write(Register);
+  Wire.write(Data);
+  Wire.endTransmission();
+}
+
+
+/*
+ * Calculates output based on prior calibration
+ */
+float calibration(float input, float m, float b)
+{
+  // Using known calibration values calibrate sensors
+  return (m*input)+b;
+}
+
+
+/*
+ * Initialize IMU
+ */
+void initializeIMU()
+{
+  // Set accelerometers low pass filter at 5Hz
+  I2CwriteByte(MPU9250_ADDRESS,29,0x06);
+  // Set gyroscope low pass filter at 5Hz
+  I2CwriteByte(MPU9250_ADDRESS,26,0x06);
+ 
+  // Configure gyroscope range
+  I2CwriteByte(MPU9250_ADDRESS,27,GYRO_FULL_SCALE_1000_DPS);
+  // Configure accelerometers range
+  I2CwriteByte(MPU9250_ADDRESS,28,ACC_FULL_SCALE_4_G);
+}
+
+/*
+ * Read relavent IMU data and calibrate the accelerometer values
+ * Calculate the estimated angles
+ */
+void readAndCalculate()
+{
+  // Read accelerometer and gyroscope
+  uint8_t Buf[14];
+  I2Cread(MPU9250_ADDRESS,0x3B,14,Buf);
+  
+  // Accelerometer and Gyroscope
+  ax=-(Buf[0]<<8 | Buf[1]);
+  az=Buf[4]<<8 | Buf[5];
+  gy=(Buf[10]<<8 | Buf[11]);
+
+  // Calibrate
+  ax = calibration(ax, mx, bx);
+  az = calibration(az, mz, bz);
+  gy -= 25;
+
+  // Calculate accel estimated angle
+  angle_accel = atan2(ax, az) * 180 / pi;
+  // Calculate Complementary Filter
+  angle = beta * (angle + gy * dt) + alpha * angle_accel;
+}
+
+
 /**
  * Displays instructions to user
  */
@@ -127,9 +260,11 @@ void displayInstructions()
     Serial.println("READY - PLEASE SEND INSTRUCTIONS AS FOLLOWING :");
     Serial.println("\t0 : Send min throttle");
     Serial.println("\t1 : Send max throttle");
-    Serial.println("\t2 : Run test function\n");
-    Serial.println("\t3 : Run arm function\n");
+    Serial.println("\t2 : Run test function");
+    Serial.println("\t3 : Run arm function");
+    Serial.println("\t4 : Print IMU Data");
 }
+
 
 /**
  * Displays countdown from 3 seconds
