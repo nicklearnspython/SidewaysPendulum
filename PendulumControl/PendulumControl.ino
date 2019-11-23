@@ -51,11 +51,13 @@
 #define bz    -0.02623918
 
 #define pi     3.1415926
-#define alpha  0.9
-#define beta   0.1
+#define alpha  0.8
+#define beta   0.2
 #define dt     0.01
 
 #define Kp        1
+#define Ki        0.01
+#define Kd        0.1
 #define ANGLE_REF 0
 
 // ---------------------------------------------------------------------------
@@ -71,6 +73,11 @@ float az;
 float gy;
 
 int input_pulse_length;
+int integrator = 0;
+int error;
+int prev_error = 0;
+int control_effort;
+int angle_ref;
 // ---------------------------------------------------------------------------
 
 /**
@@ -125,13 +132,16 @@ void loop() {
                       }
             break;
 
-            case 53 : Serial.println("P-Controller");
-                      Serial.println("Stand back ladies and gentlemen");
+            // 5
+            
+            // 6
+            case 54 : Serial.println("P-Controller");
+                      Serial.println("Stand back ladies and gentlemen!");
                       countdown();
                       arm();
                       for (int i = 0; i < 1200; i++){
                         readAndCalculate();
-                        input_pulse_length = (ANGLE_REF - angle) * Kp + HOV_PULSE_LENGTH;
+                        input_pulse_length = p_controller();
                         motor.writeMicroseconds(input_pulse_length);
                         
                         Serial.print("angle: ");
@@ -140,16 +150,92 @@ void loop() {
                         Serial.println(input_pulse_length);
                         delay(20);
                       }
-                      disarm(); 
-                      
-                      
+                      disarm();
+            break; 
+
+            // 7
+            case 55: Serial.println("PI-Controller");
+                     Serial.println("Stand back ladies and gentlemen!");
+                     countdown();
+                     arm();
+                     integrator = 0;
+                     control_effort = 0;
+                     
+                     for (int i = 0; i < 1200; i++){
+                        readAndCalculate();
+                        input_pulse_length = pi_controller();
+                        motor.writeMicroseconds(input_pulse_length);
+                        
+                        Serial.print("angle: ");
+                        Serial.print(angle);
+                        Serial.print(" | control: ");
+                        Serial.println(control_effort);
+                        delay(20);
+                      }
+                      disarm();
+            break;
+
+            // 8
+            case 56: Serial.println("PID-Controller");
+                     Serial.println("Stand back ladies and gentlemen!");
+                     countdown();
+                     arm();
+                     integrator = 0;
+                     control_effort = 0;
+                     prev_error = 0;
+                     
+                     for (int i = 0; i < 1200; i++){
+                        readAndCalculate();
+                        input_pulse_length = pid_controller();
+                        motor.writeMicroseconds(input_pulse_length);
+                        
+                        Serial.print("angle: ");
+                        Serial.print(angle);
+                        Serial.print(" | control: ");
+                        Serial.println(control_effort);
+                        delay(20);
+                      }
+                      disarm();
+            break;
         }
     }
 }
 
-
 // ---------------------------------------------------------------------------
 // Functions
+
+/* 
+ *  P Controller
+ */
+int p_controller()
+{
+  return (ANGLE_REF - angle) * Kp + HOV_PULSE_LENGTH;
+}
+
+
+/*
+ * PI Controller
+ */
+int pi_controller()
+{
+  error = (ANGLE_REF - angle);
+  integrator += error;
+  control_effort = Kp * error + Ki * integrator;
+  return control_effort + HOV_PULSE_LENGTH;
+}
+
+/*
+ * PID Controller
+ */
+int pid_controller()
+{
+  error = (ANGLE_REF - angle);
+  integrator += error;
+  control_effort = Kp * error + Ki * integrator - Kd * (error - prev_error)/2;
+  prev_error = error;
+  return control_effort + HOV_PULSE_LENGTH;
+}
+
 
 /**
  * Test function: send min throttle to max throttle to each ESC.
@@ -176,7 +262,7 @@ void arm()
 {
     Serial.println("Arming...");
     motor.writeMicroseconds(ARM_PULSE_LENGTH);
-    delay(ARM_DELAY);
+    countdown(); //delay(ARM_DELAY);
 }
 
 
@@ -286,7 +372,11 @@ void displayInstructions()
     Serial.println("\t2 : Run test function");
     Serial.println("\t3 : Run arm function");
     Serial.println("\t4 : Print IMU Data");
-    Serial.println("\t5 : P Controller");
+    Serial.println("\t5 : "); // Print RC Data");
+    Serial.println("\t6 : P Controller");
+    Serial.println("\t7 : PI Controller");
+    Serial.println("\t8 : PID Controller");
+    Serial.println("\t9 : ");
 }
 
 
