@@ -24,11 +24,11 @@
 // ---------------------------------------------------------------------------
 // Constants
 #define MIN_PULSE_LENGTH 1100 // Minimum pulse length in µs
-#define ARM_PULSE_LENGTH 1180 // Arming  pulse length in µs
+#define ARM_PULSE_LENGTH 1200 // Arming  pulse length in µs
 #define HOV_PULSE_LENGTH 1320 // Hover   pulse length in µs 1341
 #define MAX_PULSE_LENGTH 1900 // Maximum pulse length in µs
 
-#define ARM_DELAY 3000      // [ms] 3 seconds
+#define ARM_DELAY 3000        // [ms] 3 seconds
 
 #define MPU9250_ADDRESS           0x68
 #define MAG_ADDRESS               0x0C
@@ -43,21 +43,21 @@
 #define ACC_FULL_SCALE_8_G        0x10
 #define ACC_FULL_SCALE_16_G       0x18
 
-#define mx     0.00119597
-#define my     0.00119597
-#define mz     0.00119269
-#define bx     0.08292081
-#define by     0.30098593
-#define bz    -0.02623918
+#define mx        0.00119597
+#define my        0.00119597
+#define mz        0.00119269
+#define bx        0.08292081
+#define by        0.30098593
+#define bz       -0.02623918
 
-#define pi     3.1415926
-#define alpha  0.8
-#define beta   0.2
-#define dt     0.01
+#define pi        3.1415926
+#define alpha     0.9
+#define beta      0.1
+#define dt        0.01
 
 #define Kp        1
-#define Ki        0.01
-#define Kd        0.1
+#define Ki        0.02
+#define Kd        1
 #define ANGLE_REF 0
 
 // ---------------------------------------------------------------------------
@@ -73,11 +73,11 @@ float az;
 float gy;
 
 int input_pulse_length;
-int integrator = 0;
-int error;
-int prev_error = 0;
-int control_effort;
-int angle_ref;
+float integrator = 0;
+float error;
+float prev_error = 0;
+float control_effort;
+float angle_ref;
 // ---------------------------------------------------------------------------
 
 /**
@@ -150,7 +150,7 @@ void loop() {
                         Serial.println(input_pulse_length);
                         delay(20);
                       }
-                      disarm();
+                      land();
             break; 
 
             // 7
@@ -172,7 +172,7 @@ void loop() {
                         Serial.println(control_effort);
                         delay(20);
                       }
-                      disarm();
+                      land();
             break;
 
             // 8
@@ -183,16 +183,29 @@ void loop() {
                      integrator = 0;
                      control_effort = 0;
                      prev_error = 0;
+
+                     readAndCalculate();
+                     int init_angle = round(angle); 
+                     angle_ref = ANGLE_REF; //init_angle;
+                     Serial.print("Initial Angle: ");
+                     Serial.println(angle_ref);
                      
                      for (int i = 0; i < 1200; i++){
+                        if (angle_ref < ANGLE_REF) {angle_ref += 0.08;}
+                        
                         readAndCalculate();
                         input_pulse_length = pid_controller();
                         motor.writeMicroseconds(input_pulse_length);
                         
-                        Serial.print("angle: ");
+                        Serial.print("ref angle: ");
+                        Serial.print(angle_ref);
+                        Serial.print(" | angle: ");
                         Serial.print(angle);
                         Serial.print(" | control: ");
-                        Serial.println(control_effort);
+                        Serial.print(control_effort);
+                        Serial.print(" | integrator: ");
+                        Serial.println(integrator);
+
                         delay(20);
                       }
                       disarm();
@@ -229,11 +242,11 @@ int pi_controller()
  */
 int pid_controller()
 {
-  error = (ANGLE_REF - angle);
+  error = (angle_ref - angle);
   integrator += error;
   control_effort = Kp * error + Ki * integrator - Kd * (error - prev_error)/2;
   prev_error = error;
-  return control_effort + HOV_PULSE_LENGTH;
+  return control_effort + ARM_PULSE_LENGTH;
 }
 
 
@@ -255,6 +268,23 @@ void test()
 }
 
 
+/*
+ * Lands the pendulum softly on the ground
+ */
+void land()
+{
+  Serial.println("Landing...");
+  int delay_time_ms = 60;
+  while(true)
+  {
+    motor.writeMicroseconds(input_pulse_length-10);
+    input_pulse_length -= 1;
+    if (input_pulse_length < 1100) {break;}
+    if (input_pulse_length < 1300) {delay(1);}
+    else {delay(60);}
+  }
+  disarm();
+}
 /**
  * Arms the motor setting the output to a low spinning PWM
  */
